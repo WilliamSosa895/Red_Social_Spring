@@ -1,5 +1,6 @@
 package com.william.spring.security.postgresql.SpringBootSecurityPostgresApplication.java.security.jwt;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Date;
 
@@ -7,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.security.core.Authentication;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
@@ -21,40 +23,48 @@ public class JwtUtils {
     @Value("${app.jwtExpirationMs}")
     private int jwtExpirationMs;
 
-    // 🔐 Generar token desde Authentication (login normal)
-    public String generateJwtToken(org.springframework.security.core.Authentication auth) {
-        return generateTokenFromUsername(auth.getName());
+    /** Genera un JWT a partir de la Authentication (login normal) */
+    public String generateJwtToken(Authentication authentication) {
+        return generateTokenFromUsername(authentication.getName());
     }
 
-    // ✅ NUEVO: Generar token directamente desde el email o username
+    /** Genera un JWT a partir de un username/email */
     public String generateTokenFromUsername(String username) {
         return Jwts.builder()
-                .setSubject(username)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
-                .signWith(key(), SignatureAlgorithm.HS256)
-                .compact();
+            .setSubject(username)
+            .setIssuedAt(new Date())
+            .setExpiration(new Date((new Date()).getTime() + jwtExpirationMs))
+            .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+            .compact();
     }
 
-    // 🔑 Clave secreta (decodificada desde BASE64)
-    private Key key() {
-        return Keys.hmacShaKeyFor(io.jsonwebtoken.io.Decoders.BASE64.decode(jwtSecret));
-    }
-
-    // ✅ Obtener email o username desde el token
+    /** Extrae el username/email del JWT */
     public String getUserNameFromJwtToken(String token) {
-        return Jwts.parserBuilder().setSigningKey(key()).build()
-                .parseClaimsJws(token).getBody().getSubject();
+        return Jwts.parserBuilder()
+            .setSigningKey(getSigningKey())
+            .build()
+            .parseClaimsJws(token)
+            .getBody()
+            .getSubject();
     }
 
-    // ✅ Validar token JWT
+    /** Valida la integridad y la fecha del JWT */
     public boolean validateJwtToken(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(key()).build().parseClaimsJws(token);
+            Jwts.parserBuilder()
+                .setSigningKey(getSigningKey())
+                .build()
+                .parseClaimsJws(token);
             return true;
         } catch (JwtException e) {
-            logger.error("JWT error: {}", e.getMessage());
+            logger.error("JWT inválido: {}", e.getMessage());
             return false;
         }
+    }
+
+    /** Clave HMAC-SHA256 derivada directamente del texto plano */
+    private Key getSigningKey() {
+        byte[] bytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
+        return Keys.hmacShaKeyFor(bytes);
     }
 }
