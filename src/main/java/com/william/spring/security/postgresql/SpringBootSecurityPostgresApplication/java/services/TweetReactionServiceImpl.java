@@ -20,6 +20,7 @@ public class TweetReactionServiceImpl implements TweetReactionService {
 
     @Override
     public void saveOrUpdate(TweetReaction tr) {
+        // JPA detecta si existe (por la PK) y hace UPDATE; si no, INSERT
         repo.save(tr);
     }
 

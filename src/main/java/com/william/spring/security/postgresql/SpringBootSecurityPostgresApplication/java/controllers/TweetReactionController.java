@@ -37,7 +37,6 @@ public class TweetReactionController {
         TweetReactionKey key = new TweetReactionKey();
         key.setUserId(user.getId());
         key.setTweetId(tweet.getId());
-        key.setReactionId(reaction.getId());
 
         TweetReaction tr = new TweetReaction();
         tr.setId(key);
