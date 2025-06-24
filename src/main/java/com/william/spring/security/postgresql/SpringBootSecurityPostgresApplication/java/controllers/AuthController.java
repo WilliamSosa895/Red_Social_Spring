@@ -4,10 +4,13 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
@@ -31,17 +34,34 @@ public class AuthController {
     @Autowired private JwtUtils jwtUtils;
     @Autowired private MailService mailService;
 
+
     @PostMapping("/signin")
     public ResponseEntity<?> authenticateUser(@RequestBody LoginRequest lr) {
-        Authentication auth = authManager.authenticate(
-            new UsernamePasswordAuthenticationToken(lr.getUsername(), lr.getPassword()));
-        SecurityContextHolder.getContext().setAuthentication(auth);
-        String jwt = jwtUtils.generateJwtToken(auth);
-        UserDetailsImpl ud = (UserDetailsImpl) auth.getPrincipal();
-        List<String> roles = ud.getAuthorities().stream()
-            .map(a -> a.getAuthority()).collect(Collectors.toList());
-        return ResponseEntity.ok(new JwtResponse(jwt, ud.getId(), ud.getUsername(), ud.getEmail(), roles));
+        try {
+            Authentication auth = authManager.authenticate(
+                new UsernamePasswordAuthenticationToken(lr.getUsername(), lr.getPassword())
+            );
+            SecurityContextHolder.getContext().setAuthentication(auth);
+            String jwt = jwtUtils.generateJwtToken(auth);
+            UserDetailsImpl ud = (UserDetailsImpl) auth.getPrincipal();
+            List<String> roles = ud.getAuthorities().stream()
+                .map(a -> a.getAuthority()).collect(Collectors.toList());
+            return ResponseEntity.ok(new JwtResponse(
+                jwt, ud.getId(), ud.getUsername(), ud.getEmail(), roles
+            ));
+        } catch (BadCredentialsException ex) {
+            // Usuario/contraseña inválidos → HTTP 401
+            return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new MessageResponse("Error: Usuario o contraseña inválidos"));
+        } catch (AuthenticationException ex) {
+            // Cualquier otro fallo de auth también como 401
+            return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new MessageResponse("Error de autenticación"));
+        }
     }
+
 
     @PostMapping("/signup")
     public ResponseEntity<?> registerUser(@RequestBody SignupRequest sr) {
