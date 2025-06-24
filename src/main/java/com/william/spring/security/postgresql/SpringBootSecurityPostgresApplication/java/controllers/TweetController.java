@@ -16,79 +16,77 @@ import com.william.spring.security.postgresql.SpringBootSecurityPostgresApplicat
 
 @RestController
 @RequestMapping("/api/posts")
-@CrossOrigin(origins="*")
+@CrossOrigin(origins = "*")
 public class TweetController {
-    @Autowired private TweetService service;
-    @Autowired private ImageStorageService storage;
-    @Autowired private LegendRepository legendRepo;
-    @Autowired private UserRepository userRepo;
+  @Autowired
+  private TweetService service;
+  @Autowired
+  private ImageStorageService storage;
+  @Autowired
+  private LegendRepository legendRepo;
+  @Autowired
+  private UserRepository userRepo;
 
-    @PostMapping(consumes= {"multipart/form-data"})
-    public ResponseEntity<TweetResponse> create(
+  @PostMapping(consumes = { "multipart/form-data" })
+  public ResponseEntity<TweetResponse> create(
       Authentication auth,
       @RequestPart("tweet") TweetRequest req,
-      @RequestPart(value="image", required=false) MultipartFile img
-    ) {
-      Tweet t = new Tweet();
-      t.setContent(req.getContent());
-      if (img!=null && !img.isEmpty()) {
-        t.setImageUrl(storage.storeFile(img));
-      }
-      if (req.getLegendId()!=null) {
-        Legend l = legendRepo.findById(req.getLegendId())
-                             .orElseThrow(() -> new RuntimeException("Legend not found"));
-        t.setLegend(l);
-      }
-      User u = userRepo.findByUsername(
-                  ((UserDetailsImpl)auth.getPrincipal()).getUsername()
-                ).orElseThrow();
-      t.setPostedBy(u);
+      @RequestPart(value = "image", required = false) MultipartFile img) {
+    Tweet t = new Tweet();
+    t.setContent(req.getContent());
+    if (img != null && !img.isEmpty()) {
+      t.setImageUrl(storage.storeFile(img));
+    }
+    if (req.getLegendId() != null) {
+      Legend l = legendRepo.findById(req.getLegendId())
+          .orElseThrow(() -> new RuntimeException("Legend not found"));
+      t.setLegend(l);
+    }
+    User u = userRepo.findByUsername(
+        ((UserDetailsImpl) auth.getPrincipal()).getUsername()).orElseThrow();
+    t.setPostedBy(u);
 
-      return ResponseEntity.ok(toDto(service.create(t)));
+    return ResponseEntity.ok(toDto(service.create(t)));
+  }
+
+  @GetMapping
+  public ResponseEntity<Page<TweetResponse>> feed(Pageable pg) {
+    Page<Tweet> tweets = service.feed(pg, null);
+    return ResponseEntity.ok(tweets.map(this::toDto));
+  }
+
+  @GetMapping("/{id}")
+  public ResponseEntity<TweetResponse> getOne(@PathVariable Long id) {
+    return ResponseEntity.ok(toDto(service.getById(id)));
+  }
+
+  private TweetResponse toDto(Tweet t) {
+    // 1) Extrae sólo el filename (no toda la ruta que te devuelve storeFile)
+    String stored = t.getImageUrl(); // quizás algo como "uploads/abc123.png"
+    String filename = null;
+    if (stored != null && !stored.isBlank()) {
+      // Paths.get(...).getFileName() devuelve "abc123.png"
+      filename = Paths.get(stored).getFileName().toString();
     }
 
-    @GetMapping
-    public ResponseEntity<Page<TweetResponse>> feed(Pageable pg,
-        @RequestParam(value="legendId", required=false) Long lid
-    ) {
-      Page<Tweet> tweets = service.feed(pg, lid);
-      Page<TweetResponse> dtoPage = tweets.map(this::toDto);
-      return ResponseEntity.ok(dtoPage);
-    }
-
-    @GetMapping("/{id}")
-    public ResponseEntity<TweetResponse> getOne(@PathVariable Long id) {
-      return ResponseEntity.ok(toDto(service.getById(id)));
-    }
-
-    private TweetResponse toDto(Tweet t) {
-      // 1) Extrae sólo el filename (no toda la ruta que te devuelve storeFile)
-      String stored = t.getImageUrl(); // quizás algo como "uploads/abc123.png"
-      String filename = null;
-      if (stored != null && !stored.isBlank()) {
-        // Paths.get(...).getFileName() devuelve "abc123.png"
-        filename = Paths.get(stored).getFileName().toString();
-      }
-
-      // 2) Construye la URL pública correcta
-      String publicUrl = (filename != null)
+    // 2) Construye la URL pública correcta
+    String publicUrl = (filename != null)
         ? "/uploads/" + filename
         : null;
 
-      Long lid = (t.getLegend() != null)
-                 ? t.getLegend().getId()
-                 : null;
+    Long lid = (t.getLegend() != null)
+        ? t.getLegend().getId()
+        : null;
 
-      return new TweetResponse(
+    return new TweetResponse(
         t.getId(),
         t.getContent(),
-        publicUrl,          // esta ya no tendrá doble "/uploads/uploads/..."
+        publicUrl, // esta ya no tendrá doble "/uploads/uploads/..."
         t.getCreatedAt(),
         t.getPostedBy().getUsername(),
         lid,
         t.getRepostCount(),
         t.getCommentCount(),
-        t.getReactionCount()
-      );
-    }
+        t.getReactionCount());
+  }
 }
