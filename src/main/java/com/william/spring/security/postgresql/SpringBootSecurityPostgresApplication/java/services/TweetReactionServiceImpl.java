@@ -20,17 +20,12 @@ public class TweetReactionServiceImpl implements TweetReactionService {
 
     @Override
     public void saveOrUpdate(TweetReaction tr) {
-        // Borra el registro anterior (si existía) para hacer "upsert"
-        if (repo.existsById(tr.getId())) {
-            repo.deleteById(tr.getId());
-        }
         repo.save(tr);
     }
 
     @Override
     public Map<EReaction, Long> countsByTweet(Long tweetId) {
         List<Object[]> rows = repo.countByTweetGrouped(tweetId);
-        // row[0] => EReaction, row[1] => Number
         return rows.stream().collect(Collectors.toMap(
             row -> (EReaction) row[0],
             row -> ((Number) row[1]).longValue()
